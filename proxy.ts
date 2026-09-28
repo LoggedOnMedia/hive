@@ -41,7 +41,8 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Static and PWA files (service worker, manifest, icons) must load without a session.
+  // /api/the-log is called server-to-server and checks its own shared secret.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|manifest.webmanifest|api/the-log|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
