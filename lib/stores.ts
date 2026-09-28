@@ -34,7 +34,7 @@ export async function listStores(): Promise<StoreSummary[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("stores")
-    .select("id, name, location, profiles(id, full_name, email, role), store_departments(enabled)")
+    .select("id, name, location, profiles!profiles_store_id_fkey(id, full_name, email, role), store_departments(enabled)")
     .order("name");
   if (error) throw error;
 
@@ -55,7 +55,7 @@ export async function getStore(id: string): Promise<StoreDetail | null> {
   const { data, error } = await supabase
     .from("stores")
     .select(
-      "id, name, location, profiles(id, full_name, email, role), store_departments(enabled, email, departments(id, name, sort_order))",
+      "id, name, location, profiles!profiles_store_id_fkey(id, full_name, email, role), store_departments(enabled, email, departments(id, name, sort_order))",
     )
     .eq("id", id)
     .maybeSingle();

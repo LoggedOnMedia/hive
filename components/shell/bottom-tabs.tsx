@@ -8,7 +8,7 @@ import { navFor } from "@/lib/nav";
 import type { Role } from "@/lib/roles";
 import { isActive } from "./sidebar";
 
-export function BottomTabs({ role }: { role: Role }) {
+export function BottomTabs({ role, counts = {} }: { role: Role; counts?: Record<string, number> }) {
   const pathname = usePathname();
   const { primary, secondary } = navFor(role);
   const tabs = [...primary, ...secondary];
@@ -26,11 +26,16 @@ export function BottomTabs({ role }: { role: Role }) {
       >
         <span
           className={cn(
-            "flex h-8 w-12 items-center justify-center rounded-full transition-colors",
+            "relative flex h-8 w-12 items-center justify-center rounded-full transition-colors",
             active ? "bg-gold text-ink" : "text-muted",
           )}
         >
           <Icon className="size-5" strokeWidth={1.8} />
+          {(counts[item.href] ?? 0) > 0 && (
+            <span className="absolute -right-0.5 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[10px] font-bold text-ink ring-2 ring-surface">
+              {counts[item.href]}
+            </span>
+          )}
         </span>
         <span className={active ? "text-ink" : "text-muted"}>{item.label}</span>
       </Link>

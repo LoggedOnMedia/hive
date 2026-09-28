@@ -22,11 +22,12 @@ export const getViewer = cache(async (): Promise<Viewer> => {
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("profiles")
-    .select("full_name, role, store_id, stores(name)")
+    .select("full_name, role, store_id, stores!profiles_store_id_fkey(name)")
     .eq("id", auth.user.id)
     .maybeSingle();
+  if (error) throw error;
 
   // Signed in but never provisioned — nothing in the app is meant for them.
   if (!profile) redirect("/login?error=no-profile");
