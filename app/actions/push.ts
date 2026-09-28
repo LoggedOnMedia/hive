@@ -7,34 +7,31 @@ import { getViewer } from "@/lib/viewer";
 
 type SubscriptionJSON = { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
 
-/** Saves this device's push subscription for the signed-in user. */
+/**
+ * Links this device's push subscription to the signed-in user. Called when
+ * notifications are turned on, and on every visit, so a device someone else
+ * used before is handed over to whoever is signed in now.
+ */
 export async function saveSubscription(sub: SubscriptionJSON, userAgent: string) {
   const viewer = await getViewer();
   if (!sub.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) return { error: "The browser didn't return a valid subscription." };
 
-  const supabase = await createClient();
-  // A device that was subscribed by someone else (shared phone) is handed over.
-  await supabase.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
-  const { error } = await supabase.from("push_subscriptions").insert({
-    user_id: viewer.id,
-    endpoint: sub.endpoint,
-    p256dh: sub.keys.p256dh,
-    auth: sub.keys.auth,
-    user_agent: userAgent.slice(0, 300),
-  });
-  if (error) {
-    // Another user's row for this endpoint can't be deleted under RLS; hand it over with the secret key.
-    if (error.code === "23505") {
-      const admin = createAdminClient();
-      await admin
-        .from("push_subscriptions")
-        .update({ user_id: viewer.id, p256dh: sub.keys.p256dh, auth: sub.keys.auth })
-        .eq("endpoint", sub.endpoint);
-      return { ok: true };
-    }
-    return { error: error.message };
-  }
-  return { ok: true };
+  // The secret key is needed to see a row owned by someone else. The endpoint
+  // comes from this browser's own subscription, so only this device is touched.
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("push_subscriptions")
+    .select("id, user_id")
+    .eq("endpoint", sub.endpoint)
+    .maybeSingle();
+
+  if (existing?.user_id === viewer.id) return { ok: true };
+
+  const row = { user_id: viewer.id, p256dh: sub.keys.p256dh, auth: sub.keys.auth, user_agent: userAgent.slice(0, 300) };
+  const { error } = existing
+    ? await admin.from("push_subscriptions").update(row).eq("id", existing.id)
+    : await (await createClient()).from("push_subscriptions").insert({ ...row, endpoint: sub.endpoint });
+  return error ? { error: error.message } : { ok: true };
 }
 
 export async function removeSubscription(endpoint: string) {

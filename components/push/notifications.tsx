@@ -45,6 +45,9 @@ function usePush() {
     if (Notification.permission === "denied") return setState("blocked");
     const reg = await registration();
     const sub = await reg.pushManager.getSubscription();
+    // A browser has one subscription however many people use it. Re-link it to
+    // whoever is signed in now, so a shared device notifies the right person.
+    if (sub) await saveSubscription(sub.toJSON(), navigator.userAgent);
     setState(sub ? "on" : "off");
   }, []);
 
