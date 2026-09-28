@@ -9,6 +9,7 @@ import { Field, inputClass } from "@/components/ui/field";
 import { FormMessage } from "@/components/ui/form-message";
 import { cn } from "@/lib/cn";
 import { PRIORITIES, PRIORITY_META, type Priority } from "@/lib/priority";
+import { Attachments } from "./attachments";
 
 const initial: FormState = {};
 
@@ -73,6 +74,8 @@ export function ComposeForm({ stores }: { stores: { id: string; name: string }[]
           className={cn(inputClass, "h-auto py-3 leading-relaxed")}
         />
       </Field>
+
+      <Attachments />
 
       <PriorityPicker defaultValue="normal" />
 

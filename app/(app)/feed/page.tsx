@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Eye, Inbox } from "lucide-react";
+import { Eye, Inbox, Paperclip } from "lucide-react";
 import { ArchiveButton } from "@/components/feed/archive-button";
 import { PostCard } from "@/components/feed/post-card";
 import { ButtonLink } from "@/components/ui/button";
@@ -81,7 +81,13 @@ export default async function FeedPage({ searchParams }: PageProps<"/feed">) {
                 (isRM || item.seen) && <ArchiveButton postId={item.id} archived={item.archived} variant="icon" />
               }
               meta={
-                isRM && (
+                <>
+                  {item.attachments > 0 && (
+                    <span className="flex items-center gap-1 text-xs text-muted">
+                      <Paperclip className="size-3.5" /> {item.attachments}
+                    </span>
+                  )}
+                  {isRM && (
                   <span
                     className={cn(
                       "flex items-center gap-1 text-xs",
@@ -90,7 +96,8 @@ export default async function FeedPage({ searchParams }: PageProps<"/feed">) {
                   >
                     <Eye className="size-3.5" /> Seen by {item.seenCount} of {item.targetCount}
                   </span>
-                )
+                  )}
+                </>
               }
             />
           ))}

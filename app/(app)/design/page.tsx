@@ -102,8 +102,10 @@ export default function DesignPage() {
             unseen
             replies={2}
           >
-            <AttachmentCard filename="Easter_Artwork_SPAR.pdf" kind="pdf" sizeLabel="24 MB" />
-            <AttachmentCard filename="In-store_examples.jpg" kind="image" sizeLabel="3.2 MB" downloadable={false} />
+            <AttachmentCard name="Easter_Artwork_SPAR.pdf" kind="pdf" caption="24 MB" />
+            <AttachmentCard name="Easter print files" kind="link" caption="Expires in 2 days" expiringSoon />
+            <AttachmentCard name="In-store_examples.jpg" kind="image" caption="3.2 MB" downloadable={false} />
+            <AttachmentCard name="Christmas print files" kind="link" caption="Link expired 20 Dec" expired />
           </PostCard>
           <PostCard
             href="/design"

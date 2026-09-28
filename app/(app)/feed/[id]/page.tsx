@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Check, ChevronLeft, Lock, Pencil, Users } from "lucide-react";
+import { Check, ChevronLeft, Lock, Pencil, TimerOff, Users } from "lucide-react";
 import { PriorityPill } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Panel } from "@/components/ui/panel";
 import { cn } from "@/lib/cn";
 import { ArchiveButton } from "@/components/feed/archive-button";
+import { AttachmentCard } from "@/components/feed/attachment-card";
 import { ReactionBar } from "@/components/feed/emoji";
-import { getPost, getReactions, getThread } from "@/lib/posts";
+import { assetCaption, expiringSoon, fileKind } from "@/lib/assets";
+import { getPost, getPostAssets, getReactions, getThread } from "@/lib/posts";
 import { fullTime, shortTime } from "@/lib/time";
 import { getViewer } from "@/lib/viewer";
 import { DeletePostButton, MarkSeen, ReplyForm, Thread } from "./client";
@@ -23,12 +25,14 @@ export default async function PostPage({ params, searchParams }: PageProps<"/fee
   const viewer = await getViewer();
   const post = await getPost(id, viewer);
   if (!post) notFound();
-  const thread = await getThread(id);
+  const [thread, assets] = await Promise.all([getThread(id), getPostAssets(id, viewer)]);
   const isRM = viewer.role === "regional_manager";
 
   // Private replies: the regional manager reads one store's conversation at a time.
   const privateRM = isRM && !post.repliesShared;
-  const requested = (await searchParams).store;
+  const { store: requested, expired: expiredId } = await searchParams;
+  const expiredAsset = assets.find((a) => a.id === expiredId);
+  const downloadable = assets.filter((a) => a.downloadable);
   const activeStore = privateRM
     ? (post.recipients.find((r) => r.storeId === requested) ??
       post.recipients.find((r) => thread.some((m) => m.storeId === r.storeId)) ??
@@ -64,9 +68,34 @@ export default async function PostPage({ params, searchParams }: PageProps<"/fee
             </div>
             <h1 className="mt-3 text-xl font-bold leading-snug tracking-tight text-ink md:text-2xl">{post.title}</h1>
             <p className="mt-2 text-xs text-muted">
-              {post.authorName} · Regional Manager · {fullTime(post.createdAt)}
+              {post.senderName ?? post.authorName} · {post.senderName ? "Design studio" : "Regional Manager"} ·{" "}
+              {fullTime(post.createdAt)}
             </p>
             {post.body && <p className="mt-4 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink">{post.body}</p>}
+            {assets.length > 0 && (
+              <div className="mt-5 flex flex-col gap-2">
+                {expiredAsset && (
+                  <p role="alert" className="flex items-center gap-2 rounded-xl bg-urgent-tint px-3 py-2 text-sm text-urgent">
+                    <TimerOff className="size-4 shrink-0" /> The download link for “{expiredAsset.name}” has expired.
+                    {isRM ? " Send the stores a fresh link." : " Reply below to ask for a new one."}
+                  </p>
+                )}
+                {assets.map((a) => (
+                  <AttachmentCard
+                    key={a.id}
+                    href={`/a/${a.id}`}
+                    name={a.name}
+                    kind={fileKind(a.kind, a.mimeType)}
+                    caption={assetCaption(a)}
+                    downloadable={a.downloadable}
+                    expired={a.expired}
+                    expiringSoon={expiringSoon(a)}
+                    downloaded={!isRM && a.downloadedByMe}
+                    previewUrl={a.previewUrl}
+                  />
+                ))}
+              </div>
+            )}
             <div className="mt-4">
               <ReactionBar postId={post.id} target="post" reactions={reactions.post ?? []} />
             </div>
@@ -93,7 +122,7 @@ export default async function PostPage({ params, searchParams }: PageProps<"/fee
                   </>
                 ) : (
                   <>
-                    <Lock className="size-3.5" /> {isRM ? "Private — one conversation per store" : "Only you and your regional manager see these"}
+                    <Lock className="size-3.5" /> {isRM ? "Private â one conversation per store" : "Only you and your regional manager see these"}
                   </>
                 )}
               </span>
@@ -138,10 +167,10 @@ export default async function PostPage({ params, searchParams }: PageProps<"/fee
               storeId={activeStore?.storeId}
               placeholder={
                 activeStore
-                  ? `Reply to ${activeStore.storeName}…`
+                  ? `Reply to ${activeStore.storeName}â¦`
                   : isRM
-                    ? "Reply to all stores…"
-                    : "Write a reply…"
+                    ? "Reply to all storesâ¦"
+                    : "Write a replyâ¦"
               }
             />
           </section>
@@ -149,7 +178,10 @@ export default async function PostPage({ params, searchParams }: PageProps<"/fee
 
         {isRM && (
           <aside>
-            <Panel title={`Seen by ${seenCount} of ${post.recipients.length}`}>
+            <Panel
+              title={`Seen by ${seenCount} of ${post.recipients.length}`}
+              description={downloadable.length > 0 ? "Opened, and files downloaded, per store" : undefined}
+            >
               <ul className="-mx-1 flex flex-col">
                 {post.recipients.map((r) => (
                   <li key={r.storeId} className="flex items-center gap-3 rounded-lg px-1 py-2">
@@ -161,7 +193,17 @@ export default async function PostPage({ params, searchParams }: PageProps<"/fee
                     >
                       {r.seenAt ? <Check className="size-3.5" strokeWidth={2.6} /> : <span className="size-1.5 rounded-full bg-faint" />}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-sm text-ink">{r.storeName}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-ink">{r.storeName}</span>
+                      {downloadable.length > 0 && (() => {
+                        const got = downloadable.filter((a) => a.downloadedBy.includes(r.storeId)).length;
+                        return (
+                          <span className={cn("block text-xs", got === downloadable.length ? "text-ok" : "text-muted")}>
+                            Downloaded {got} of {downloadable.length}
+                          </span>
+                        );
+                      })()}
+                    </span>
                     <span className="shrink-0 text-xs text-muted">{r.seenAt ? shortTime(r.seenAt) : "Not opened"}</span>
                   </li>
                 ))}

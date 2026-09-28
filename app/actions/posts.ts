@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { validateAssets } from "@/lib/assets";
 import { PRIORITIES, type Priority } from "@/lib/priority";
 import { getViewer, requireRegionalManager } from "@/lib/viewer";
 import type { FormState } from "./stores";
@@ -21,6 +22,16 @@ export async function createPost(_prev: FormState, fd: FormData): Promise<FormSt
   const priority = readPriority(fd);
   if (!title) return { error: "Give the message a title." };
   if (!priority) return { error: "Choose a priority." };
+  if (fd.get("uploading")) return { error: "Wait for the uploads to finish, then send." };
+
+  let assetsJson: unknown;
+  try {
+    assetsJson = JSON.parse(String(fd.get("assets") ?? "[]"));
+  } catch {
+    assetsJson = null;
+  }
+  const checked = validateAssets(assetsJson);
+  if ("error" in checked) return { error: checked.error };
 
   const supabase = await createClient();
   let storeIds: string[];
@@ -40,6 +51,7 @@ export async function createPost(_prev: FormState, fd: FormData): Promise<FormSt
     p_priority: priority,
     p_replies_shared: fd.get("replies") !== "private",
     p_store_ids: storeIds,
+    p_assets: checked.assets,
   });
   if (error) return { error: error.message };
 
