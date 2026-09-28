@@ -20,7 +20,10 @@ export type Viewer = {
 export const getViewer = cache(async (): Promise<Viewer> => {
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) redirect("/login");
+  // The proxy only checks the session token locally; if the account has since been
+  // removed or the session revoked, getUser fails. The ?error keeps the proxy from
+  // bouncing this straight back to /feed (which would loop).
+  if (!auth.user) redirect("/login?error=session-ended");
 
   const { data: profile, error } = await supabase
     .from("profiles")

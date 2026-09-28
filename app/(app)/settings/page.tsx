@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { LogOut } from "lucide-react";
 import { signOut } from "@/app/actions/auth";
+import { NotificationSettings } from "@/components/push/notifications";
 import { ROLE_LABEL } from "@/components/shell/top-bar";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
+import { Panel } from "@/components/ui/panel";
 import { getViewer } from "@/lib/viewer";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -33,6 +35,11 @@ export default async function SettingsPage() {
           </Button>
         </form>
       </section>
+      <div className="mt-4 max-w-xl">
+        <Panel title="Notifications" description="Get a notification on this device when a message or reply comes in. Turn it on for each phone or computer you use.">
+          <NotificationSettings />
+        </Panel>
+      </div>
     </>
   );
 }

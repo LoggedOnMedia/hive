@@ -6,6 +6,7 @@ export const metadata: Metadata = { title: "Sign in" };
 
 const ERRORS: Record<string, string> = {
   "no-profile": "Your account isn't set up yet. Please contact Logged On Media.",
+  "session-ended": "Your session has ended. Please sign in again.",
 };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {

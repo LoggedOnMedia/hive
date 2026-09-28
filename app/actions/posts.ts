@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { validateAssets } from "@/lib/assets";
+import { notifyNewPost, notifyReply } from "@/lib/push";
 import { PRIORITIES, type Priority } from "@/lib/priority";
 import { getViewer, requireRegionalManager } from "@/lib/viewer";
 import type { FormState } from "./stores";
@@ -55,6 +57,7 @@ export async function createPost(_prev: FormState, fd: FormData): Promise<FormSt
   });
   if (error) return { error: error.message };
 
+  after(() => notifyNewPost(postId));
   revalidatePath("/", "layout");
   redirect(`/feed/${postId}`);
 }
@@ -100,6 +103,8 @@ export async function replyToPost(postId: string, _prev: FormState, fd: FormData
     .from("thread_messages")
     .insert({ post_id: postId, author_id: viewer.id, store_id: storeId, parent_id: text(fd, "parent_id") || null, body });
   if (error) return { error: "Couldn't send your reply. Please try again." };
+
+  after(() => notifyReply(postId, viewer.id, storeId, body));
 
   revalidatePath(`/feed/${postId}`);
   revalidatePath("/feed");
