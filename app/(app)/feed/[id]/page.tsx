@@ -122,7 +122,7 @@ export default async function PostPage({ params, searchParams }: PageProps<"/fee
                   </>
                 ) : (
                   <>
-                    <Lock className="size-3.5" /> {isRM ? "Private â one conversation per store" : "Only you and your regional manager see these"}
+                    <Lock className="size-3.5" /> {isRM ? "Private — one conversation per store" : "Only you and your regional manager see these"}
                   </>
                 )}
               </span>
@@ -167,10 +167,10 @@ export default async function PostPage({ params, searchParams }: PageProps<"/fee
               storeId={activeStore?.storeId}
               placeholder={
                 activeStore
-                  ? `Reply to ${activeStore.storeName}â¦`
+                  ? `Reply to ${activeStore.storeName}…`
                   : isRM
-                    ? "Reply to all storesâ¦"
-                    : "Write a replyâ¦"
+                    ? "Reply to all stores…"
+                    : "Write a reply…"
               }
             />
           </section>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { LogOut } from "lucide-react";
 import { signOut } from "@/app/actions/auth";
+import { SamsungInstallNote } from "@/components/push/install-note";
 import { NotificationSettings } from "@/components/push/notifications";
 import { ROLE_LABEL } from "@/components/shell/top-bar";
 import { Avatar } from "@/components/ui/avatar";
@@ -38,6 +39,7 @@ export default async function SettingsPage() {
       <div className="mt-4 max-w-xl">
         <Panel title="Notifications" description="Get a notification on this device when a message or reply comes in. Turn it on for each phone or computer you use.">
           <NotificationSettings />
+          <SamsungInstallNote variant="inline" />
         </Panel>
       </div>
     </>

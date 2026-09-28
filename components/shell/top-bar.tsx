@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { Bell, LogOut, Plus } from "lucide-react";
 import { signOut } from "@/app/actions/auth";
 import { ButtonLink } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
+import { RefreshButton } from "./refresh-button";
 import type { Viewer } from "@/lib/viewer";
 
 export const ROLE_LABEL = { regional_manager: "Regional Manager", store_manager: "Store Manager" } as const;
@@ -10,18 +12,21 @@ export function TopBar({ viewer }: { viewer: Viewer }) {
   return (
     <header className="sticky top-0 z-20 hidden h-[72px] items-center gap-4 border-b border-line bg-surface/90 px-8 backdrop-blur md:flex">
       <div className="ml-auto flex items-center gap-3">
+        <RefreshButton className="size-11 text-ink hover:bg-subtle" />
         {viewer.role === "regional_manager" && (
           <ButtonLink href="/compose">
             <Plus className="size-4" strokeWidth={2.4} />
             New message
           </ButtonLink>
         )}
-        <button
+        <Link
+          href="/settings"
           className="relative flex size-11 items-center justify-center rounded-xl text-ink hover:bg-subtle"
-          aria-label="Notifications"
+          aria-label="Notification settings"
+          title="Notification settings"
         >
           <Bell className="size-5" strokeWidth={1.8} />
-        </button>
+        </Link>
         <div className="flex items-center gap-3 border-l border-line pl-4">
           <Avatar name={viewer.name} tone={viewer.role === "regional_manager" ? "gold" : "neutral"} />
           <div className="leading-tight">

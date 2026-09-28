@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Eye, Inbox, Paperclip } from "lucide-react";
 import { ArchiveButton } from "@/components/feed/archive-button";
 import { PostCard } from "@/components/feed/post-card";
+import { SamsungInstallNote } from "@/components/push/install-note";
 import { NotificationPrompt } from "@/components/push/notifications";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -46,6 +47,7 @@ export default async function FeedPage({ searchParams }: PageProps<"/feed">) {
 
   return (
     <>
+      <SamsungInstallNote />
       <NotificationPrompt />
       <PageHeader
         title="Feed"

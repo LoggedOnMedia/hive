@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Bell } from "lucide-react";
 import { HiveLogo } from "@/components/brand/logo";
 import { Avatar } from "@/components/ui/avatar";
+import { RefreshButton } from "./refresh-button";
 import type { Viewer } from "@/lib/viewer";
 
 export function MobileHeader({ viewer }: { viewer: Viewer }) {
@@ -11,12 +12,14 @@ export function MobileHeader({ viewer }: { viewer: Viewer }) {
         <HiveLogo tone="light" className="h-8 w-auto" />
       </Link>
       <div className="ml-auto flex items-center gap-1">
-        <button
+        <RefreshButton className="size-10 text-white" />
+        <Link
+          href="/settings"
           className="relative flex size-10 items-center justify-center rounded-xl text-white"
-          aria-label="Notifications"
+          aria-label="Notification settings"
         >
           <Bell className="size-5" strokeWidth={1.8} />
-        </button>
+        </Link>
         <Avatar name={viewer.name} size="sm" tone={viewer.role === "regional_manager" ? "gold" : "chrome"} />
       </div>
     </header>
