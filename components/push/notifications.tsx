@@ -34,6 +34,7 @@ async function registration() {
 function usePush() {
   const [state, setState] = useState<State>("loading");
   const [error, setError] = useState("");
+  const [hint, setHint] = useState("");
   const [pending, start] = useTransition();
 
   const refresh = useCallback(async () => {
@@ -61,7 +62,19 @@ function usePush() {
     start(async () => {
       setError("");
       if (!VAPID) return setError("Notifications aren't set up on the server yet.");
-      const permission = await Notification.requestPermission();
+      // Edge and Chrome sometimes ask quietly (a crossed-out bell in the address bar)
+      // instead of a popup, and the request waits until it's answered.
+      const slow = setTimeout(
+        () =>
+          setHint(
+            "Your browser is asking for permission. Look for a bell icon at the right of the address bar (or the padlock on the left) and choose Allow.",
+          ),
+        4000,
+      );
+      const permission = await Notification.requestPermission().finally(() => {
+        clearTimeout(slow);
+        setHint("");
+      });
       if (permission !== "granted") return setState(permission === "denied" ? "blocked" : "off");
       try {
         const reg = await registration();
@@ -88,7 +101,7 @@ function usePush() {
       setState("off");
     });
 
-  return { state, error, pending, enable, disable, setError };
+  return { state, error, hint, pending, enable, disable, setError };
 }
 
 function IOSSteps() {
@@ -112,7 +125,7 @@ function IOSSteps() {
 
 /** Settings card: status, turn on/off, send a test. */
 export function NotificationSettings() {
-  const { state, error, pending, enable, disable, setError } = usePush();
+  const { state, error, hint, pending, enable, disable, setError } = usePush();
   const [tested, setTested] = useState("");
   const [testing, startTest] = useTransition();
 
@@ -168,6 +181,7 @@ export function NotificationSettings() {
           )}
         </div>
       )}
+      {hint && <p className="rounded-xl bg-gold-tint px-3 py-2 text-sm text-ink">{hint}</p>}
       {tested && !error && <p className="text-sm text-ok">{tested}</p>}
       {error && <p className="text-sm text-urgent">{error}</p>}
     </div>
@@ -178,7 +192,7 @@ const DISMISS_KEY = "hive-push-prompt-dismissed";
 
 /** Feed banner nudging store managers to turn notifications on. Hidden once on, or dismissed. */
 export function NotificationPrompt() {
-  const { state, error, pending, enable } = usePush();
+  const { state, error, hint, pending, enable } = usePush();
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
@@ -214,6 +228,7 @@ export function NotificationPrompt() {
         ) : (
           <p className="text-sm text-muted">So urgent messages reach you even when Hive is closed.</p>
         )}
+        {hint && <p className="mt-1 text-sm font-medium text-ink">{hint}</p>}
         {error && <p className="mt-1 text-sm text-urgent">{error}</p>}
       </div>
       {state === "off" && (
