@@ -17,10 +17,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     const { count } = await supabase.from("stores").select("id", { count: "exact", head: true });
     footer = (
       <SidebarCard
-        href="/stores"
+        href="/dashboard"
         label="Region overview"
         value={`${count ?? 0} ${count === 1 ? "store" : "stores"}`}
-        caption="Stats coming soon"
+        caption="View dashboard"
       />
     );
   } else {
