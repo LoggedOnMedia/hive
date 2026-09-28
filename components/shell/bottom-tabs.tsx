@@ -1,0 +1,66 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Plus } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { navFor } from "@/lib/nav";
+import type { Role } from "@/lib/roles";
+import { isActive } from "./sidebar";
+
+export function BottomTabs({ role }: { role: Role }) {
+  const pathname = usePathname();
+  const { primary, secondary } = navFor(role);
+  const tabs = [...primary, ...secondary];
+  const canCompose = role === "regional_manager";
+
+  const items = tabs.map((item) => {
+    const Icon = item.icon;
+    const active = isActive(pathname, item.href);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        aria-current={active ? "page" : undefined}
+        className="flex flex-1 flex-col items-center gap-1 py-2 text-[11px] font-medium"
+      >
+        <span
+          className={cn(
+            "flex h-8 w-12 items-center justify-center rounded-full transition-colors",
+            active ? "bg-gold text-ink" : "text-muted",
+          )}
+        >
+          <Icon className="size-5" strokeWidth={1.8} />
+        </span>
+        <span className={active ? "text-ink" : "text-muted"}>{item.label}</span>
+      </Link>
+    );
+  });
+
+  // Regional manager gets a raised "New" action in the middle of the bar.
+  if (canCompose) {
+    items.splice(
+      Math.ceil(items.length / 2),
+      0,
+      <Link
+        key="compose"
+        href="/compose"
+        className="flex flex-1 flex-col items-center gap-1 py-2 text-[11px] font-medium text-ink"
+      >
+        <span className="-mt-5 flex size-12 items-center justify-center rounded-full bg-gold shadow-lg shadow-gold/40 ring-4 ring-surface">
+          <Plus className="size-6" strokeWidth={2.2} />
+        </span>
+        <span>New</span>
+      </Link>,
+    );
+  }
+
+  return (
+    <nav
+      aria-label="Main"
+      className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+    >
+      {items}
+    </nav>
+  );
+}

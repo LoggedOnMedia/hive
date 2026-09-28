@@ -1,26 +1,53 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * Hive design tokens.
+ * Two-tone system: near-black chrome (sidebar, mobile header) against a light
+ * content area. Gold is the brand accent — used as a fill (with ink text on
+ * top), never as text on white, where it fails contrast.
+ */
+@theme {
+  --font-sans: var(--font-inter);
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Brand — sampled from Logo.ai */
+  --color-gold: #ffc245;
+  --color-gold-strong: #f2a916; /* hover/pressed on gold fills */
+  --color-gold-tint: #fff6df; /* highlighted cards, active rows */
+  --color-gold-line: #fbe3a6;
+  --color-ink: #2c2e35; /* brand charcoal — primary text, wordmark */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Chrome (sidebar / mobile header) */
+  --color-chrome: #17191f;
+  --color-chrome-raised: #22252d;
+  --color-chrome-line: #2d313a;
+  --color-chrome-text: #c9ccd3;
+  --color-chrome-muted: #7d828d;
+
+  /* Content */
+  --color-canvas: #f6f6f3;
+  --color-surface: #ffffff;
+  --color-subtle: #f0f0ec;
+  --color-line: #e7e7e2;
+  --color-muted: #6b6f78;
+  --color-faint: #9a9ea6;
+
+  /* Status */
+  --color-urgent: #e5484d;
+  --color-urgent-tint: #fdecec;
+  --color-high: #b86e00;
+  --color-high-tint: #fff1d6;
+  --color-ok: #2f9e5b;
+
+  --radius-card: 1rem;
+  --shadow-card: 0 1px 2px rgb(23 25 31 / 0.04), 0 1px 1px rgb(23 25 31 / 0.03);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+::selection {
+  background: var(--color-gold);
+  color: var(--color-ink);
 }
