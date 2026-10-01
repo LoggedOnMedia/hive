@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Clock, Loader2, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Loader2, Play, XCircle } from "lucide-react";
 import { Meter } from "@/components/dashboard/parts";
 import { ButtonLink } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
@@ -136,9 +136,25 @@ export default async function WaPage({ params }: { params: Promise<{ slug?: stri
     const mine = v.isRM || post.created_by === v.id;
     return (
       <li className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-line bg-surface p-4 md:flex-row md:p-5">
-        {post.previewUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL
-          <img src={post.previewUrl} alt="" className="h-28 w-full rounded-xl object-cover md:h-24 md:w-24" />
+        {post.media[0]?.url && (
+          <div className="relative h-28 w-full shrink-0 overflow-hidden rounded-xl bg-subtle md:h-24 md:w-24">
+            {post.media[0].kind === "video" ? (
+              <>
+                <video src={post.media[0].url} muted playsInline preload="metadata" className="size-full object-cover" />
+                <span className="absolute inset-0 flex items-center justify-center bg-black/20 text-white">
+                  <Play className="size-6 fill-white" />
+                </span>
+              </>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL
+              <img src={post.media[0].url} alt="" className="size-full object-cover" />
+            )}
+            {post.media.length > 1 && (
+              <span className="absolute bottom-1.5 right-1.5 rounded-full bg-ink/80 px-2 py-0.5 text-[11px] font-semibold text-white">
+                +{post.media.length - 1}
+              </span>
+            )}
+          </div>
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">

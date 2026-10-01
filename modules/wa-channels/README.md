@@ -1,6 +1,6 @@
 # WhatsApp Channel Poster (`wa-channels`)
 
-Posts an image and/or text to the stores' WhatsApp Channels — now or on a
+Posts images, MP4 videos and/or text to the stores' WhatsApp Channels — now or on a
 schedule — through [Whapi.Cloud](https://whapi.cloud), using one standard
 WhatsApp number linked by QR code. Fully removable.
 
@@ -13,14 +13,21 @@ WhatsApp number linked by QR code. Fully removable.
 
 - `server/whapi.ts` is the **only** file that talks to the provider. Switching
   to WAHA / Evolution API / Wassenger means rewriting that file only.
-- Posting creates a `wa_posts` row and one `wa_post_targets` row per channel
+- Posting creates a `wa_posts` row, its media in order (`wa_post_media`, up to
+  10 JPEG/PNG/MP4 items, 16 MB each) and one `wa_post_targets` row per channel
   (groups are expanded and de-duplicated).
+- Channels have no albums or carousels, so each media item is its own channel
+  post, in order, 2 s apart, with the caption on the **last** one. A caption
+  over 1,024 characters (WhatsApp's media-caption limit) goes as a separate
+  text post after the media. `server/parts.ts` builds that list.
+- Progress is saved after every part (`parts_sent`), so "Retry failed" carries
+  on from where a channel stopped instead of re-sending.
 - Sending happens in the background (`server/sender.ts`), **one channel at a
   time**, with a random gap (`WA_SEND_DELAY_SECONDS`, default 10–20 s) between
   sends. The database hands out targets and reserves send slots
   (`wa_claim_next`), so overlapping runs never double-send.
 - A Supabase **pg_cron** job pings `/api/wa/tick` every minute (Vercel Hobby
-  only allows daily crons). Each ping sends what fits in ~45 s; "Post now" also
+  only allows daily crons). Each ping sends what fits in ~100 s (route `maxDuration` 120); "Post now" also
   starts a run immediately.
 - Network failure: one retry. 4xx: no retry, marked failed. 429: back off
   10 min. **401: everything pauses** with "WhatsApp disconnected — re-scan the
@@ -36,7 +43,7 @@ WhatsApp number linked by QR code. Fully removable.
 | Limit | Whapi | Hive blocks at |
 |---|---|---|
 | API requests / month | 1,000 | warns at 800, blocks at 980 |
-| Messages / day (UTC) | 150 | 145 |
+| Messages / day (UTC) | 150 | 145 (every image/video/text part counts) |
 | Active conversations / month | 5 | 5 channels posted to this month |
 
 The 5-conversation limit means the Sandbox demo can reach **about 5 of the 22
@@ -46,7 +53,8 @@ changed). Usage is still logged and shown.
 
 ## Setup
 
-1. Run `db/up.sql` in the Supabase SQL editor.
+1. Run `db/up.sql` in the Supabase SQL editor. (Installs from before a patch
+   was added also need that `db/patch-*.sql`; fresh installs don't.)
 2. From the Hive folder: `node modules/wa-channels/setup.mjs`
    - adds the `WA_*` settings (with a generated `WA_CRON_SECRET`) to `.env.local`
    - writes `db/schedule.local.sql` (git-ignored). Run it in the SQL editor —

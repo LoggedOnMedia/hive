@@ -2,17 +2,21 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarClock, ImagePlus, Loader2, Send, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, ImagePlus, Loader2, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, inputClass } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
-import { createWaPost, getImageUploadUrl } from "../actions";
+import { createWaPost, getMediaUploadUrl } from "../actions";
 import { WhatsAppText } from "./wa-format";
 
 type Channel = { id: string; name: string; store_name: string | null };
 type Group = { id: string; name: string; channel_ids: string[] };
+type Item = { key: string; file: File; preview: string; kind: "image" | "video" };
 
 const MAX = 16 * 1024 * 1024;
+const MAX_ITEMS = 10;
+const CAPTION_MAX_ON_MEDIA = 1024;
+const TYPES = ["image/jpeg", "image/png", "video/mp4"];
 
 /** "YYYY-MM-DDTHH:mm" picked in SA time → UTC ISO string. */
 const saToUtc = (local: string) => new Date(`${local}:00+02:00`).toISOString();
@@ -20,7 +24,7 @@ const saToUtc = (local: string) => new Date(`${local}:00+02:00`).toISOString();
 export function NewPostForm({ channels, groups, isRM }: { channels: Channel[]; groups: Group[]; isRM: boolean }) {
   const router = useRouter();
   const [caption, setCaption] = useState("");
-  const [image, setImage] = useState<{ file: File; preview: string } | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
   // A store manager with one channel has it pre-selected.
   const [selected, setSelected] = useState<Set<string>>(() => new Set(!isRM && channels.length === 1 ? [channels[0].id] : []));
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
@@ -47,13 +51,40 @@ export function NewPostForm({ channels, groups, isRM }: { channels: Channel[]; g
     update(next);
   };
 
-  const pickImage = (file?: File) => {
+  const pickFiles = (files: FileList | null) => {
     setError("");
-    if (!file) return;
-    if (!["image/jpeg", "image/png"].includes(file.type)) return setError("Use a JPEG or PNG image.");
-    if (file.size > MAX) return setError("Images must be under 16 MB.");
-    setImage({ file, preview: URL.createObjectURL(file) });
+    if (!files) return;
+    const added: Item[] = [];
+    for (const file of Array.from(files)) {
+      if (!TYPES.includes(file.type)) {
+        setError(`"${file.name}" isn't a JPEG, PNG or MP4.`);
+        continue;
+      }
+      if (file.size > MAX) {
+        setError(`"${file.name}" is over 16 MB — WhatsApp's limit for channel media.`);
+        continue;
+      }
+      added.push({
+        key: crypto.randomUUID(),
+        file,
+        preview: URL.createObjectURL(file),
+        kind: file.type.startsWith("video/") ? "video" : "image",
+      });
+    }
+    setItems((list) => {
+      const next = [...list, ...added];
+      if (next.length > MAX_ITEMS) setError(`Up to ${MAX_ITEMS} images or videos per post — the extra ones weren't added.`);
+      return next.slice(0, MAX_ITEMS);
+    });
+    if (fileInput.current) fileInput.current.value = "";
   };
+
+  const move = (i: number, dir: -1 | 1) =>
+    setItems((list) => {
+      const next = [...list];
+      [next[i], next[i + dir]] = [next[i + dir], next[i]];
+      return next;
+    });
 
   // Wraps the selected caption text in a WhatsApp formatting marker. Spaces at
   // the edges of the selection (Windows double-click often grabs one) are left
@@ -78,34 +109,34 @@ export function NewPostForm({ channels, groups, isRM }: { channels: Channel[]; g
     start(async () => {
       setError("");
       setOk("");
-      if (!caption.trim() && !image) return setError("Add an image, some text, or both.");
+      if (!caption.trim() && items.length === 0) return setError("Add an image or video, some text, or both.");
       if (reach.length === 0) return setError("Choose at least one channel.");
       if (mode === "schedule" && !when) return setError("Pick a date and time.");
 
-      let mediaPath: string | null = null;
-      if (image) {
-        setStatus("Uploading image…");
-        const up = await getImageUploadUrl(image.file.name, image.file.size, image.file.type);
+      // Upload each file straight to storage, in order.
+      const media: { path: string; mime: string }[] = [];
+      for (const [i, item] of items.entries()) {
+        setStatus(`Uploading ${i + 1} of ${items.length}…`);
+        const up = await getMediaUploadUrl(item.file.name, item.file.size, item.file.type);
         if (up.error || !up.url || !up.path) {
           setStatus("");
-          return setError(up.error ?? "Couldn't upload the image.");
+          return setError(up.error ?? `Couldn't upload "${item.file.name}".`);
         }
         const form = new FormData();
         form.append("cacheControl", "3600");
-        form.append("", image.file);
+        form.append("", item.file);
         const res = await fetch(up.url, { method: "PUT", body: form, headers: { "x-upsert": "false" } });
         if (!res.ok) {
           setStatus("");
-          return setError(`Uploading the image failed (${res.status}).`);
+          return setError(`Uploading "${item.file.name}" failed (${res.status}).`);
         }
-        mediaPath = up.path;
+        media.push({ path: up.path, mime: item.file.type });
       }
 
       setStatus(mode === "now" ? "Queuing…" : "Scheduling…");
       const result = await createWaPost({
         caption,
-        mediaPath,
-        mediaMime: image?.file.type ?? null,
+        media,
         channelIds: [...selected],
         groupIds: [...selectedGroups],
         scheduledAt: mode === "schedule" ? saToUtc(when) : null,
@@ -114,7 +145,7 @@ export function NewPostForm({ channels, groups, isRM }: { channels: Channel[]; g
       if (result.error) return setError(result.error);
       setOk(result.ok ?? "Done");
       setCaption("");
-      setImage(null);
+      setItems([]);
       setSelectedGroups(new Set());
       if (isRM) setSelected(new Set());
       router.push("/whatsapp");
@@ -123,30 +154,52 @@ export function NewPostForm({ channels, groups, isRM }: { channels: Channel[]; g
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
       <div className="flex flex-col gap-5 rounded-[var(--radius-card)] border border-line bg-surface p-5 md:p-6">
-        {/* Image */}
+        {/* Images & video */}
         <div>
-          <p className="mb-2 text-sm font-medium text-ink">Image</p>
-          {image ? (
-            <div className="flex items-center gap-3 rounded-xl border border-line p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview */}
-              <img src={image.preview} alt="" className="size-16 rounded-lg object-cover" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-ink">{image.file.name}</p>
-                <p className="text-xs text-muted">{(image.file.size / 1024 / 1024).toFixed(1)} MB</p>
-              </div>
-              <button type="button" onClick={() => setImage(null)} aria-label="Remove image" className="rounded-full p-2 text-faint hover:bg-subtle hover:text-urgent">
-                <Trash2 className="size-4" />
-              </button>
-            </div>
-          ) : (
-            <>
-              <input ref={fileInput} type="file" accept="image/jpeg,image/png" className="sr-only" onChange={(e) => pickImage(e.target.files?.[0])} />
-              <Button type="button" variant="secondary" size="sm" onClick={() => fileInput.current?.click()}>
-                <ImagePlus className="size-4" strokeWidth={1.8} /> Add image
-              </Button>
-              <span className="ml-2 text-xs text-muted">JPEG or PNG, up to 16 MB. Optional.</span>
-            </>
+          <p className="mb-2 text-sm font-medium text-ink">Images &amp; video</p>
+          {items.length > 0 && (
+            <ul className="mb-2 flex flex-col gap-2">
+              {items.map((item, i) => (
+                <li key={item.key} className="flex items-center gap-3 rounded-xl border border-line p-2">
+                  <span className="w-5 text-center text-xs font-semibold text-faint">{i + 1}</span>
+                  {item.kind === "video" ? (
+                    <video src={item.preview} muted playsInline preload="metadata" className="size-14 rounded-lg bg-subtle object-cover" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
+                    <img src={item.preview} alt="" className="size-14 rounded-lg object-cover" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink">{item.file.name}</p>
+                    <p className="text-xs text-muted">
+                      {item.kind === "video" ? "Video" : "Image"} · {(item.file.size / 1024 / 1024).toFixed(1)} MB
+                      {i === items.length - 1 && caption.trim() && caption.trim().length <= CAPTION_MAX_ON_MEDIA && " · caption goes here"}
+                    </p>
+                  </div>
+                  <div className="flex">
+                    <button type="button" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up" className="rounded-full p-1.5 text-faint hover:bg-subtle hover:text-ink disabled:opacity-30">
+                      <ArrowUp className="size-4" />
+                    </button>
+                    <button type="button" disabled={i === items.length - 1} onClick={() => move(i, 1)} aria-label="Move down" className="rounded-full p-1.5 text-faint hover:bg-subtle hover:text-ink disabled:opacity-30">
+                      <ArrowDown className="size-4" />
+                    </button>
+                    <button type="button" onClick={() => setItems((l) => l.filter((x) => x.key !== item.key))} aria-label="Remove" className="rounded-full p-1.5 text-faint hover:bg-subtle hover:text-urgent">
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
+          <input ref={fileInput} type="file" multiple accept="image/jpeg,image/png,video/mp4" className="sr-only" onChange={(e) => pickFiles(e.target.files)} />
+          {items.length < MAX_ITEMS && (
+            <Button type="button" variant="secondary" size="sm" onClick={() => fileInput.current?.click()}>
+              <ImagePlus className="size-4" strokeWidth={1.8} /> {items.length ? "Add more" : "Add images or video"}
+            </Button>
+          )}
+          <p className="mt-1.5 text-xs text-muted">
+            Optional. Up to {MAX_ITEMS} JPEG/PNG images or MP4 videos, 16 MB each. Each goes out as its own post, in this
+            order, with the caption on the last one.
+          </p>
         </div>
 
         {/* Caption */}
@@ -279,19 +332,48 @@ export function NewPostForm({ channels, groups, isRM }: { channels: Channel[]; g
       {/* Preview */}
       <aside className="flex flex-col gap-2">
         <p className="text-xs font-semibold uppercase tracking-wider text-faint">Preview</p>
-        <div className="rounded-[var(--radius-card)] bg-[#efeae2] p-4">
-          <div className="max-w-[300px] overflow-hidden rounded-xl bg-white shadow-sm">
-            {image && (
-              // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
-              <img src={image.preview} alt="" className="w-full object-cover" />
-            )}
-            {(caption || !image) && (
+        <div className="flex flex-col gap-2 rounded-[var(--radius-card)] bg-[#efeae2] p-4">
+          {/* One bubble per post, in order; the caption rides on the last media
+              item, or follows as its own post when it's too long for a caption. */}
+          {items.map((item, i) => {
+            const captionHere = i === items.length - 1 && caption.trim() && caption.trim().length <= CAPTION_MAX_ON_MEDIA;
+            return (
+              <div key={item.key} className="max-w-[300px] overflow-hidden rounded-xl bg-white shadow-sm">
+                {item.kind === "video" ? (
+                  <video src={item.preview} controls muted playsInline preload="metadata" className="w-full" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
+                  <img src={item.preview} alt="" className="w-full object-cover" />
+                )}
+                {captionHere && (
+                  <p className="break-words px-3 py-2 text-[14px] leading-snug text-[#111b21]">
+                    <WhatsAppText text={caption} />
+                  </p>
+                )}
+              </div>
+            );
+          })}
+          {(items.length === 0 || caption.trim().length > CAPTION_MAX_ON_MEDIA) && (
+            <div className="max-w-[300px] rounded-xl bg-white shadow-sm">
               <p className="break-words px-3 py-2 text-[14px] leading-snug text-[#111b21]">
                 {caption ? <WhatsAppText text={caption} /> : <span className="text-faint">Your caption will appear here.</span>}
               </p>
-            )}
-          </div>
+            </div>
+          )}
         </div>
+        {items.length > 0 && caption.trim().length > CAPTION_MAX_ON_MEDIA && (
+          <p className="text-xs text-muted">
+            The text is longer than WhatsApp allows on a photo or video (1,024 characters), so it goes out as its own post
+            after them.
+          </p>
+        )}
+        {items.length > 1 && reach.length > 0 && (
+          <p className="text-xs text-muted">
+            {items.length + (caption.trim().length > CAPTION_MAX_ON_MEDIA ? 1 : 0)} posts per channel ×{" "}
+            {reach.length} {reach.length === 1 ? "channel" : "channels"} ={" "}
+            {(items.length + (caption.trim().length > CAPTION_MAX_ON_MEDIA ? 1 : 0)) * reach.length} messages.
+          </p>
+        )}
       </aside>
     </div>
   );

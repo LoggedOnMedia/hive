@@ -48,8 +48,7 @@ create table public.wa_posts (
     check (status in ('draft', 'scheduled', 'sending', 'sent', 'partial', 'failed')),
   scheduled_at timestamptz not null default now(),   -- UTC; shown in Africa/Johannesburg
   created_by uuid references public.profiles (id) on delete set null,
-  created_at timestamptz not null default now(),
-  constraint wa_posts_has_content check (media_path is not null or length(trim(caption)) > 0)
+  created_at timestamptz not null default now()
 );
 
 create index wa_posts_due_idx on public.wa_posts (status, scheduled_at);
@@ -63,12 +62,25 @@ create table public.wa_post_targets (
   whapi_message_id text,
   error text,
   attempts int not null default 0,
+  -- Parts (media items, then a long-caption text) already delivered, so retries resume.
+  parts_sent int not null default 0,
   claimed_at timestamptz,
   sent_at timestamptz,
   unique (post_id, channel_id)
 );
 
 create index wa_post_targets_pending_idx on public.wa_post_targets (status, post_id);
+
+-- Ordered media for a post (images and MP4 videos); each is its own channel
+-- post, caption on the last. (media_path/media_mime on wa_posts are legacy.)
+create table public.wa_post_media (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.wa_posts (id) on delete cascade,
+  path text not null,
+  mime text not null check (mime in ('image/jpeg', 'image/png', 'video/mp4')),
+  sort_order int not null default 0
+);
+create index wa_post_media_post_idx on public.wa_post_media (post_id, sort_order);
 
 -- ---------------------------------------------------------------------------
 -- Usage (sandbox quotas) and sender state
@@ -95,6 +107,7 @@ alter table public.wa_groups enable row level security;
 alter table public.wa_group_channels enable row level security;
 alter table public.wa_posts enable row level security;
 alter table public.wa_post_targets enable row level security;
+alter table public.wa_post_media enable row level security;
 alter table public.wa_usage enable row level security;
 alter table public.wa_state enable row level security;
 
@@ -241,10 +254,10 @@ revoke execute on function public.wa_mark_sent() from public, anon, authenticate
 grant execute on function public.wa_mark_sent() to service_role;
 
 -- ---------------------------------------------------------------------------
--- Storage: private bucket for post images (JPEG/PNG, max 16 MB like WhatsApp).
+-- Storage: private bucket for post media (JPEG/PNG/MP4, max 16 MB like WhatsApp).
 -- Uploads use one-time signed URLs issued by the server; no policies needed.
 -- ---------------------------------------------------------------------------
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('wa-media', 'wa-media', false, 16777216, array['image/jpeg', 'image/png'])
+values ('wa-media', 'wa-media', false, 16777216, array['image/jpeg', 'image/png', 'video/mp4'])
 on conflict (id) do nothing;

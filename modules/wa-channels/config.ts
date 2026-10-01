@@ -36,5 +36,14 @@ export const SANDBOX = {
   conversationsPerMonth: 5,
 };
 
-/** Images WhatsApp accepts for channel posts. */
-export const MEDIA = { maxBytes: 16 * 1024 * 1024, types: ["image/jpeg", "image/png"] };
+/** Media WhatsApp accepts for channel posts: images and MP4 video, 16 MB each. */
+export const MEDIA = {
+  maxBytes: 16 * 1024 * 1024,
+  types: ["image/jpeg", "image/png", "video/mp4"],
+  /** Items per post; each goes out as its own channel post. */
+  maxItems: 10,
+  /** WhatsApp caps captions on media at 1,024 characters; longer text goes as its own post. */
+  captionMax: 1024,
+  /** Pause between the items of one post on the same channel, to keep them in order. */
+  itemGapMs: 2000,
+};

@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { MEDIA, waEnabled } from "./config";
 import { listGroups, postableChannelIds, type WaViewer } from "./server/data";
 import { waViewer } from "./server/viewer";
+import { buildParts } from "./server/parts";
 import { runTick } from "./server/sender";
 import { getUsage, sandboxBlock } from "./server/usage";
 import { listAdminChannels, WhapiError } from "./server/whapi";
@@ -120,14 +121,14 @@ export async function deleteGroup(groupId: string): Promise<Result> {
 // Posts
 // ---------------------------------------------------------------------------
 
-/** One-time upload URL so the browser sends the image straight to storage. */
-export async function getImageUploadUrl(name: string, size: number, type: string): Promise<Result & { path?: string; url?: string }> {
+/** One-time upload URL so the browser sends an image or video straight to storage. */
+export async function getMediaUploadUrl(name: string, size: number, type: string): Promise<Result & { path?: string; url?: string }> {
   if (!waEnabled()) return { error: "WhatsApp channels are switched off." };
   await waViewer();
-  if (!MEDIA.types.includes(type)) return { error: "Use a JPEG or PNG image." };
-  if (size <= 0 || size > MEDIA.maxBytes) return { error: "Images must be under 16 MB." };
-  const ext = type === "image/png" ? "png" : "jpg";
-  const path = `posts/${randomUUID()}/${name.replace(/[^\w.\-]+/g, "_").replace(/\.[^.]*$/, "").slice(0, 60) || "image"}.${ext}`;
+  if (!MEDIA.types.includes(type)) return { error: "Use JPEG or PNG images, or MP4 video." };
+  if (size <= 0 || size > MEDIA.maxBytes) return { error: `"${name}" is over 16 MB — WhatsApp's limit for channel media.` };
+  const ext = type === "image/png" ? "png" : type === "video/mp4" ? "mp4" : "jpg";
+  const path = `posts/${randomUUID()}/${name.replace(/[^\w.\-]+/g, "_").replace(/\.[^.]*$/, "").slice(0, 60) || "media"}.${ext}`;
   const { data, error } = await createAdminClient().storage.from("wa-media").createSignedUploadUrl(path);
   if (error || !data) return { error: error?.message ?? "Couldn't prepare the upload." };
   return { path, url: data.signedUrl };
@@ -135,8 +136,8 @@ export async function getImageUploadUrl(name: string, size: number, type: string
 
 export type NewPost = {
   caption: string;
-  mediaPath: string | null;
-  mediaMime: string | null;
+  /** Images/videos in posting order; the caption goes on the last one. */
+  media: { path: string; mime: string }[];
   channelIds: string[];
   groupIds: string[];
   /** ISO time (UTC) to send at, or null for now. */
@@ -147,9 +148,14 @@ export async function createWaPost(input: NewPost): Promise<Result & { postId?: 
   if (!waEnabled()) return { error: "WhatsApp channels are switched off." };
   const v = await waViewer();
   const caption = input.caption.trim().slice(0, 4096);
-  if (!caption && !input.mediaPath) return { error: "Add an image, some text, or both." };
-  if (input.mediaPath && !input.mediaPath.startsWith("posts/")) return { error: "That image didn't upload properly." };
-  if (input.mediaMime && !MEDIA.types.includes(input.mediaMime)) return { error: "Use a JPEG or PNG image." };
+  const media = input.media ?? [];
+  if (!caption && media.length === 0) return { error: "Add an image or video, some text, or both." };
+  if (media.length > MEDIA.maxItems) return { error: `Up to ${MEDIA.maxItems} images or videos per post.` };
+  for (const m of media) {
+    if (!m.path?.startsWith("posts/")) return { error: "One of the files didn't upload properly." };
+    if (!MEDIA.types.includes(m.mime)) return { error: "Use JPEG or PNG images, or MP4 video." };
+  }
+  const parts = buildParts(caption, media);
 
   // Expand groups (regional manager only) and de-duplicate.
   const allowed = await postableChannelIds(v);
@@ -170,7 +176,8 @@ export async function createWaPost(input: NewPost): Promise<Result & { postId?: 
   }
 
   // Sandbox: refuse up front rather than queue something that can't go out.
-  const blocked = sandboxBlock(await getUsage(), targets.length, targets);
+  // Every part on every channel is a message (and a request).
+  const blocked = sandboxBlock(await getUsage(), targets.length * parts.length, targets);
   if (blocked) return { error: blocked };
 
   const admin = createAdminClient();
@@ -178,8 +185,6 @@ export async function createWaPost(input: NewPost): Promise<Result & { postId?: 
     .from("wa_posts")
     .insert({
       caption,
-      media_path: input.mediaPath,
-      media_mime: input.mediaMime,
       status: "scheduled",
       scheduled_at: when.toISOString(),
       created_by: v.id,
@@ -187,9 +192,12 @@ export async function createWaPost(input: NewPost): Promise<Result & { postId?: 
     .select("id")
     .single();
   if (error) return { error: error.message };
-  const { error: tErr } = await admin
-    .from("wa_post_targets")
-    .insert(targets.map((channel_id) => ({ post_id: post.id, channel_id })));
+  const { error: mErr } = media.length
+    ? await admin.from("wa_post_media").insert(media.map((m, i) => ({ post_id: post.id, path: m.path, mime: m.mime, sort_order: i })))
+    : { error: null };
+  const { error: tErr } = mErr
+    ? { error: mErr }
+    : await admin.from("wa_post_targets").insert(targets.map((channel_id) => ({ post_id: post.id, channel_id })));
   if (tErr) {
     await admin.from("wa_posts").delete().eq("id", post.id);
     return { error: tErr.message };
@@ -205,6 +213,16 @@ export async function createWaPost(input: NewPost): Promise<Result & { postId?: 
   };
 }
 
+async function postPartCount(postId: string) {
+  const admin = createAdminClient();
+  const [{ data: post }, { data: media }] = await Promise.all([
+    admin.from("wa_posts").select("caption, media_path, media_mime").eq("id", postId).single(),
+    admin.from("wa_post_media").select("path, mime").eq("post_id", postId).order("sort_order"),
+  ]);
+  const items = media?.length ? media : post?.media_path ? [{ path: post.media_path, mime: post.media_mime ?? "image/jpeg" }] : [];
+  return buildParts(post?.caption ?? "", items).length;
+}
+
 async function ownPost(v: WaViewer, postId: string) {
   const { data } = await createAdminClient().from("wa_posts").select("id, created_by, status, media_path").eq("id", postId).single();
   if (!data) return null;
@@ -218,9 +236,16 @@ export async function retryFailed(postId: string): Promise<Result> {
   if (!(await ownPost(v, postId))) return { error: "You can't retry that post." };
 
   const admin = createAdminClient();
-  const { data: failed } = await admin.from("wa_post_targets").select("channel_id").eq("post_id", postId).eq("status", "failed");
+  const { data: failed } = await admin
+    .from("wa_post_targets")
+    .select("channel_id, parts_sent")
+    .eq("post_id", postId)
+    .eq("status", "failed");
   if (!failed?.length) return { error: "Nothing failed on this post." };
-  const blocked = sandboxBlock(await getUsage(), failed.length, failed.map((f) => f.channel_id));
+  // Retries carry on from where each channel stopped, so only the remaining parts count.
+  const totalParts = await postPartCount(postId);
+  const remaining = failed.reduce((n, f) => n + Math.max(1, totalParts - f.parts_sent), 0);
+  const blocked = sandboxBlock(await getUsage(), remaining, failed.map((f) => f.channel_id));
   if (blocked) return { error: blocked };
 
   await admin
@@ -241,9 +266,11 @@ export async function cancelPost(postId: string): Promise<Result> {
   if (!post) return { error: "You can't cancel that post." };
   if (post.status !== "scheduled") return { error: "It has already started sending." };
   const admin = createAdminClient();
+  const { data: media } = await admin.from("wa_post_media").select("path").eq("post_id", postId);
   const { error } = await admin.from("wa_posts").delete().eq("id", postId).eq("status", "scheduled");
   if (error) return { error: error.message };
-  if (post.media_path) await admin.storage.from("wa-media").remove([post.media_path]);
+  const paths = [...(media ?? []).map((m) => m.path), ...(post.media_path ? [post.media_path] : [])];
+  if (paths.length) await admin.storage.from("wa-media").remove(paths);
   return done("Cancelled");
 }
 

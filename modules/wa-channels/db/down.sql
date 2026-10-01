@@ -23,6 +23,7 @@ drop function if exists public.wa_refresh_post_status(uuid);
 drop function if exists public.wa_claim_next(int);
 drop function if exists public.wa_bump_usage(int, int);
 
+drop table if exists public.wa_post_media;
 drop table if exists public.wa_post_targets;
 drop table if exists public.wa_posts;
 drop table if exists public.wa_group_channels;

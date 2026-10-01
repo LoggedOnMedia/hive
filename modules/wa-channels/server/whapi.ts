@@ -72,16 +72,18 @@ export async function listAdminChannels(): Promise<ProviderChannel[]> {
     .map((n) => ({ id: n.id, name: n.name || n.id, role: n.role ?? "" }));
 }
 
+export type OutgoingMedia = { url: string; kind: "image" | "video" };
+
 /**
- * Posts to one channel. `imageUrl` is a short-lived HTTPS URL the provider
- * downloads the image from; without it, a text post is sent.
+ * Posts to one channel: an image or video (`media.url` is a short-lived HTTPS
+ * URL the provider downloads from) with an optional caption, or plain text.
  */
-export async function postToChannel(channelId: string, caption: string, imageUrl?: string | null): Promise<SendResult> {
+export async function postToChannel(channelId: string, caption: string, media?: OutgoingMedia | null): Promise<SendResult> {
   try {
-    const data = (await call(imageUrl ? "/messages/image" : "/messages/text", {
+    const data = (await call(media ? `/messages/${media.kind}` : "/messages/text", {
       method: "POST",
       body: JSON.stringify(
-        imageUrl ? { to: channelId, media: imageUrl, caption: caption || undefined } : { to: channelId, body: caption },
+        media ? { to: channelId, media: media.url, caption: caption || undefined } : { to: channelId, body: caption },
       ),
     })) as { message?: { id?: string }; id?: string };
     await bumpUsage({ messages: 1 });

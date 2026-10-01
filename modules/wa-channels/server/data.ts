@@ -67,14 +67,14 @@ export type PostTarget = {
 export type Post = {
   id: string;
   caption: string;
-  media_path: string | null;
+  /** Images/videos in posting order, with short-lived URLs for previews. */
+  media: { path: string; kind: "image" | "video"; url: string | null }[];
   status: "draft" | "scheduled" | "sending" | "sent" | "partial" | "failed";
   scheduled_at: string;
   created_at: string;
   created_by: string | null;
   author: string | null;
   targets: PostTarget[];
-  previewUrl: string | null;
 };
 
 export async function listPosts(v: WaViewer, limit = 50): Promise<Post[]> {
@@ -82,7 +82,7 @@ export async function listPosts(v: WaViewer, limit = 50): Promise<Post[]> {
   const { data, error } = await admin
     .from("wa_posts")
     .select(
-      "id, caption, media_path, status, scheduled_at, created_at, created_by, profiles(full_name), wa_post_targets(id, channel_id, status, error, sent_at, wa_channels(name, store_id))",
+      "id, caption, media_path, media_mime, status, scheduled_at, created_at, created_by, profiles(full_name), wa_post_media(path, mime, sort_order), wa_post_targets(id, channel_id, status, error, sent_at, wa_channels(name, store_id))",
     )
     .order("scheduled_at", { ascending: false })
     .limit(limit);
@@ -112,26 +112,36 @@ export async function listPosts(v: WaViewer, limit = 50): Promise<Post[]> {
     return {
       id: p.id,
       caption: p.caption,
-      media_path: p.media_path,
+      media: mediaOf(p),
       status: p.status as Post["status"],
       scheduled_at: p.scheduled_at,
       created_at: p.created_at,
       created_by: p.created_by,
       author: (p.profiles as unknown as { full_name: string } | null)?.full_name ?? null,
       targets,
-      previewUrl: null as string | null,
     };
   });
 
   const visible = v.isRM ? posts : posts.filter((p) => p.targets.length > 0);
 
-  const paths = visible.flatMap((p) => (p.media_path ? [p.media_path] : []));
+  const paths = visible.flatMap((p) => p.media.map((m) => m.path));
   if (paths.length) {
     const { data: urls } = await admin.storage.from("wa-media").createSignedUrls(paths, 60 * 60);
     const map = new Map((urls ?? []).map((u) => [u.path, u.signedUrl]));
-    for (const p of visible) if (p.media_path) p.previewUrl = map.get(p.media_path) ?? null;
+    for (const p of visible) for (const m of p.media) m.url = map.get(m.path) ?? null;
   }
   return visible;
+}
+
+/** A post's media in order: wa_post_media, or the legacy single image. */
+function mediaOf(p: { media_path: string | null; media_mime: string | null; wa_post_media: unknown }): Post["media"] {
+  const rows = (p.wa_post_media as { path: string; mime: string; sort_order: number }[] | null) ?? [];
+  const list = rows.length
+    ? [...rows].sort((a, b) => a.sort_order - b.sort_order)
+    : p.media_path
+      ? [{ path: p.media_path, mime: p.media_mime ?? "image/jpeg", sort_order: 0 }]
+      : [];
+  return list.map((m) => ({ path: m.path, kind: m.mime.startsWith("video/") ? "video" : "image", url: null }));
 }
 
 export type SenderState = { paused: boolean; paused_reason: string | null; backoff_until: string | null };

@@ -21,8 +21,8 @@ async function handle(request: NextRequest, ctx: { params: Promise<{ path: strin
   if (path !== "tick") return new NextResponse("Not found", { status: 404 });
   if (!authorised(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Due scheduled posts are picked up here; sends are spaced out inside the run.
-  const result = await runTick(45_000);
+  // Due scheduled posts are picked up here; sends are spaced out inside the run (up to ~100 s; the route allows 120).
+  const result = await runTick(100_000);
   return NextResponse.json(result);
 }
 
