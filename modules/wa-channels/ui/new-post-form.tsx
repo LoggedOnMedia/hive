@@ -55,11 +55,17 @@ export function NewPostForm({ channels, groups, isRM }: { channels: Channel[]; g
     setImage({ file, preview: URL.createObjectURL(file) });
   };
 
-  // Wraps the selected caption text in a WhatsApp formatting marker.
+  // Wraps the selected caption text in a WhatsApp formatting marker. Spaces at
+  // the edges of the selection (Windows double-click often grabs one) are left
+  // outside the markers: WhatsApp ignores "* word*" but formats "*word*".
   const wrap = (marker: string) => {
     const el = captionRef.current;
     if (!el) return;
-    const { selectionStart: a, selectionEnd: b, value } = el;
+    const { value } = el;
+    let a = el.selectionStart;
+    let b = el.selectionEnd;
+    while (a < b && /\s/.test(value[a])) a++;
+    while (b > a && /\s/.test(value[b - 1])) b--;
     const next = value.slice(0, a) + marker + value.slice(a, b) + marker + value.slice(b);
     setCaption(next);
     requestAnimationFrame(() => {

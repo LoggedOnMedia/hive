@@ -12,6 +12,7 @@ import { SANDBOX } from "./config";
 import { getSenderState, listChannels, listGroups, listPosts, listStoresForLinking, type Post } from "./server/data";
 import { waViewer } from "./server/viewer";
 import { getUsage, sandboxWarning } from "./server/usage";
+import { AutoRefresh } from "./ui/auto-refresh";
 import { ChannelRowControls, GroupEditor, PostActions, ResumeButton, SyncButton } from "./ui/manage";
 import { NewPostForm } from "./ui/new-post-form";
 import { WhatsAppText } from "./ui/wa-format";
@@ -102,8 +103,14 @@ export default async function WaPage({ params }: { params: Promise<{ slug?: stri
 
   async function PostsSection() {
     const posts = await listPosts(v);
+    // Keep statuses live while anything is sending or due within the next minute.
+    const soon = Date.now() + 60_000;
+    const inFlight = posts.some(
+      (p) => p.status === "sending" || (p.status === "scheduled" && Date.parse(p.scheduled_at) <= soon),
+    );
     return (
       <div className="flex flex-col gap-4">
+        <AutoRefresh active={inFlight} />
         {v.isRM && <UsageWidget />}
         {posts.length === 0 ? (
           <p className="rounded-[var(--radius-card)] border border-line bg-surface px-4 py-10 text-center text-sm text-muted">
