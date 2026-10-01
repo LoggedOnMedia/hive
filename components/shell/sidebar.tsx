@@ -33,14 +33,16 @@ function SidebarLink({ item, active, count = 0 }: { item: NavItem; active: boole
 export function Sidebar({
   role,
   counts = {},
+  features = [],
   footer,
 }: {
   role: Role;
   counts?: Record<string, number>;
+  features?: string[];
   footer?: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { primary, secondary } = navFor(role);
+  const { primary, secondary } = navFor(role, features);
 
   return (
     <aside className="relative hidden w-64 shrink-0 flex-col overflow-hidden bg-chrome md:flex">

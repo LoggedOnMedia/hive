@@ -42,7 +42,8 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // Static and PWA files (service worker, manifest, icons) must load without a session.
   // /api/the-log is called server-to-server and checks its own shared secret.
+  // api/wa/ — wa-channels module (removable): cron tick, checks WA_CRON_SECRET.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|manifest.webmanifest|api/the-log|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|manifest.webmanifest|api/the-log|api/wa/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

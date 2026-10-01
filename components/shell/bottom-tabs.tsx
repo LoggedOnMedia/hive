@@ -8,9 +8,17 @@ import { navFor } from "@/lib/nav";
 import type { Role } from "@/lib/roles";
 import { isActive } from "./sidebar";
 
-export function BottomTabs({ role, counts = {} }: { role: Role; counts?: Record<string, number> }) {
+export function BottomTabs({
+  role,
+  counts = {},
+  features = [],
+}: {
+  role: Role;
+  counts?: Record<string, number>;
+  features?: string[];
+}) {
   const pathname = usePathname();
-  const { primary, secondary } = navFor(role);
+  const { primary, secondary } = navFor(role, features);
   const tabs = [...primary, ...secondary];
   const canCompose = role === "regional_manager";
 
