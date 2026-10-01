@@ -1,8 +1,6 @@
 import "server-only";
-import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getViewer, type Viewer } from "@/lib/viewer";
-import { waEnabled } from "../config";
+import type { Viewer } from "@/lib/viewer";
 
 // Reads for the module's pages. wa_* tables have no RLS policies, so every
 // read goes through the secret-key client and is scoped here by role:
@@ -10,13 +8,6 @@ import { waEnabled } from "../config";
 // channels linked to their own store, and posts that went to them.
 
 export type WaViewer = Viewer & { isRM: boolean };
-
-/** The signed-in viewer, or a 404 when the feature is switched off. */
-export async function waViewer(): Promise<WaViewer> {
-  if (!waEnabled()) notFound();
-  const viewer = await getViewer();
-  return { ...viewer, isRM: viewer.role === "regional_manager" };
-}
 
 export type Channel = {
   id: string;

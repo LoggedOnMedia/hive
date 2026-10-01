@@ -17,6 +17,7 @@ begin
 exception when others then null;
 end $$;
 
+drop function if exists public.wa_mark_sent();
 drop function if exists public.wa_fail_stale_sends();
 drop function if exists public.wa_refresh_post_status(uuid);
 drop function if exists public.wa_claim_next(int);

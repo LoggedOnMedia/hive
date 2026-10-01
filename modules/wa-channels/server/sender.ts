@@ -66,6 +66,9 @@ export async function runTick(budgetMs = 45_000): Promise<TickResult> {
     }
 
     const sent = await postToChannel(claim.whapi_channel_id!, claim.caption ?? "", imageUrl);
+    // The gap to the next send counts from when this one finished, not when it was claimed,
+    // so a slow request can't squeeze the next post closer than the configured gap.
+    await admin.rpc("wa_mark_sent");
     if (sent.ok) {
       await finish(claim, { status: "sent", whapi_message_id: sent.messageId, sent_at: new Date().toISOString(), error: null });
       result.sent++;
