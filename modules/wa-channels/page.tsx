@@ -13,6 +13,7 @@ import { getSenderState, listChannels, listGroups, listPosts, listStoresForLinki
 import { waViewer } from "./server/viewer";
 import { getUsage, sandboxWarning } from "./server/usage";
 import { AutoRefresh } from "./ui/auto-refresh";
+import { RefreshStatus } from "./ui/refresh-status";
 import { ChannelRowControls, GroupEditor, PostActions, ResumeButton, SyncButton } from "./ui/manage";
 import { NewPostForm } from "./ui/new-post-form";
 import { WhatsAppText } from "./ui/wa-format";
@@ -111,6 +112,7 @@ export default async function WaPage({ params }: { params: Promise<{ slug?: stri
     return (
       <div className="flex flex-col gap-4">
         <AutoRefresh active={inFlight} />
+        <RefreshStatus />
         {v.isRM && <UsageWidget />}
         {posts.length === 0 ? (
           <p className="rounded-[var(--radius-card)] border border-line bg-surface px-4 py-10 text-center text-sm text-muted">
